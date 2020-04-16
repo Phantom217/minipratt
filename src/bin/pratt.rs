@@ -62,6 +62,11 @@ fn expr(input: &str) -> S {
 fn expr_bp(lexer: &mut Lexer, min_bp: u8) -> S {
     let mut lhs = match lexer.next() {
         Token::Atom(it) => S::Atom(it),
+        Token::Op(op) => {
+            let ((), r_bp) = prefix_binding_power(op);
+            let rhs = expr_bp(lexer, r_bp);
+            S::Cons(op, vec![rhs])
+        }
         t => panic!("bad token: {:?}", t),
     };
 
@@ -71,6 +76,7 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u8) -> S {
             Token::Op(op) => op,
             t => panic!("bad token: {:?}", t),
         };
+
         let (l_bp, r_bp) = infix_binding_power(op);
         if l_bp < min_bp {
             break;
@@ -85,12 +91,20 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u8) -> S {
     lhs
 }
 
+/// Compute binding power for an unary operator.
+fn prefix_binding_power(op: char) -> ((), u8) {
+    match op {
+        '+' | '-' => ((), 5),
+        _ => panic!("bad op: {:?}", op),
+    }
+}
+
 /// Compute left/right binding power for a binary operator.
 fn infix_binding_power(op: char) -> (u8, u8) {
     match op {
         '+' | '-' => (1, 2),
         '*' | '/' => (3, 4),
-        '.' => (6, 5),
+        '.' => (8, 7),
         _ => panic!("bad op: {:?}"),
     }
 }
@@ -114,6 +128,13 @@ fn tests() {
     // test desired right associativity
     let s = expr(" 1 + 2 + f . g . h * 3 * 4");
     assert_eq!(s.to_string(), "(+ (+ 1 2) (* (* (. f (. g h)) 3) 4))");
+
+    //test unary operator precedence
+    let s = expr("--1 * 2");
+    assert_eq!(s.to_string(), "(* (- (- 1)) 2)");
+
+    let s = expr("--f . g");
+    assert_eq!(s.to_string(), "(- (- (. f g)))");
 }
 
 fn main() {}
