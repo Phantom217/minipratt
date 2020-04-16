@@ -77,6 +77,16 @@ fn expr_bp(lexer: &mut Lexer, min_bp: u8) -> S {
             t => panic!("bad token: {:?}", t),
         };
 
+        if let Some((l_bp, ())) = postfix_binding_power(op) {
+            if l_bp < min_bp {
+                break;
+            }
+            lexer.next();
+
+            lhs = S::Cons(op, vec![lhs]);
+            continue;
+        }
+
         let (l_bp, r_bp) = infix_binding_power(op);
         if l_bp < min_bp {
             break;
@@ -99,12 +109,20 @@ fn prefix_binding_power(op: char) -> ((), u8) {
     }
 }
 
+fn postfix_binding_power(op: char) -> Option<(u8, ())> {
+    let res = match op {
+        '!' => (7, ()),
+        _ => return None,
+    };
+    Some(res)
+}
+
 /// Compute left/right binding power for a binary operator.
 fn infix_binding_power(op: char) -> (u8, u8) {
     match op {
         '+' | '-' => (1, 2),
         '*' | '/' => (3, 4),
-        '.' => (8, 7),
+        '.' => (10, 9),
         _ => panic!("bad op: {:?}"),
     }
 }
@@ -129,12 +147,19 @@ fn tests() {
     let s = expr(" 1 + 2 + f . g . h * 3 * 4");
     assert_eq!(s.to_string(), "(+ (+ 1 2) (* (* (. f (. g h)) 3) 4))");
 
-    //test unary operator precedence
+    // test unary operator precedence
     let s = expr("--1 * 2");
     assert_eq!(s.to_string(), "(* (- (- 1)) 2)");
 
     let s = expr("--f . g");
     assert_eq!(s.to_string(), "(- (- (. f g)))");
+
+    // Test postfix operator
+    let s = expr("-9!");
+    assert_eq!(s.to_string(), "(- (! 9))");
+
+    let s = expr("f . g !");
+    assert_eq!(s.to_string(), "(! (. f g))");
 }
 
 fn main() {}
