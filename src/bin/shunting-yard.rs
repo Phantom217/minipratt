@@ -47,43 +47,67 @@ impl Lexer {
 
 fn expr(input: &str) -> S {
     let mut lexer = Lexer::new(input);
-    expr_bp(&mut lexer, 0).unwrap()
+    expr_bp(&mut lexer).unwrap()
 }
 
-fn expr_bp(lexer: &mut Lexer, min_bp: u8) -> Option<S> {
-    let mut lhs = None;
+struct Frame {
+    min_bp: u8,
+    lhs: Option<S>,
+    token: Option<char>,
+}
+
+fn expr_bp(lexer: &mut Lexer) -> Option<S> {
+    let mut top = Frame {
+        min_bp: 0,
+        lhs: None,
+        token: None,
+    };
+    let mut stack = Vec::new();
 
     loop {
-        let token = match lexer.peek() {
-            Some(token) => token,
-            None => return lhs,
+        let token = lexer.next();
+        let (token, r_bp) = loop {
+            match binding_power(token, top.lhs.is_none()) {
+                Some((t, (l_bp, r_bp))) if top.min_bp <= l_bp => break (t, r_bp),
+                _ => {
+                    let res = top;
+                    top = match stack.pop() {
+                        Some(it) => it,
+                        None => return res.lhs,
+                    };
+
+                    let mut args = Vec::new();
+                    args.extend(top.lhs);
+                    args.extend(res.lhs);
+                    top.lhs = Some(S::Cons(res.token.unwrap(), args));
+                }
+            };
         };
 
-        let r_bp = match binding_power(token, lhs.is_none()) {
-            Some((l_bp, r_bp)) if min_bp <= l_bp => r_bp,
-            _ => return lhs,
-        };
-        lexer.next();
-
-        let rhs = expr_bp(lexer, r_bp);
-        if token == '(' {
-            assert_eq!(lexer.next(), Some(')'));
-            lhs = rhs;
+        if token == ')' {
+            assert_eq!(top.token, Some('('));
+            let res = top;
+            top = stack.pop().unwrap();
+            top.lhs = res.lhs;
             continue;
         }
 
-        let mut args = Vec::new();
-        args.extend(lhs);
-        args.extend(rhs);
-        lhs = Some(S::Cons(token, args));
+        stack.push(top);
+        top = Frame {
+            min_bp: r_bp,
+            lhs: None,
+            token: Some(token),
+        };
     }
 }
 
 /// Compute left/right binding power for an operator.
-fn binding_power(op: char, prefix: bool) -> Option<(u8, u8)> {
+fn binding_power(op: Option<char>, prefix: bool) -> Option<(char, (u8, u8))> {
+    let op = op?;
     let res = match op {
         '0'..='9' | 'a'..='z' | 'A'..='Z' => (99, 100),
         '(' => (99, 0),
+        ')' => (0, 100),
         '=' => (2, 1),
         '+' | '-' if prefix => (99, 9),
         '+' | '-' => (5, 6),
@@ -92,7 +116,56 @@ fn binding_power(op: char, prefix: bool) -> Option<(u8, u8)> {
         '.' => (14, 13),
         _ => return None,
     };
-    Some(res)
+    Some((op, res))
+}
+
+#[test]
+fn tests() {
+    // parse single number
+    let s = expr("1");
+    assert_eq!(s.to_string(), "1");
+
+    let s = expr("1 + 2 * 3");
+    assert_eq!(s.to_string(), "(+ 1 (* 2 3))");
+
+    let s = expr("a + b * c * d + e");
+    assert_eq!(s.to_string(), "(+ (+ a (* (* b c) d)) e)");
+
+    // function composition
+    let s = expr("f . g . h");
+    assert_eq!(s.to_string(), "(. f (. g h))");
+
+    // test desired right associativity
+    let s = expr(" 1 + 2 + f . g . h * 3 * 4");
+    assert_eq!(s.to_string(), "(+ (+ 1 2) (* (* (. f (. g h)) 3) 4))");
+
+    // test unary operator precedence
+    let s = expr("--1 * 2");
+    assert_eq!(s.to_string(), "(* (- (- 1)) 2)");
+
+    let s = expr("--f . g");
+    assert_eq!(s.to_string(), "(- (- (. f g)))");
+
+    // Test postfix operator
+    let s = expr("-9!");
+    assert_eq!(s.to_string(), "(- (! 9))");
+
+    let s = expr("f . g !");
+    assert_eq!(s.to_string(), "(! (. f g))");
+
+    // test parenthesis
+    let s = expr("(((0)))");
+    assert_eq!(s.to_string(), "0");
+
+    // test indexing operator
+    //let s = expr("x[0][1]");
+    //assert_eq!(s.to_string(), "([ ([ x 0) 1)");
+
+    //let s = expr("a ? b : c ? d : e");
+    //assert_eq!(s.to_string(), "(? a b (? c d e))");
+
+    //let s = expr("a = 0 ? b : c = d");
+    //assert_eq!(s.to_string(), "(= a (= (? 0 b c) d))");
 }
 
 fn main() {
