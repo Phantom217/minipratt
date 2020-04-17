@@ -39,15 +39,14 @@ impl Lexer {
     fn next(&mut self) -> Option<char> {
         self.tokens.pop()
     }
-
-    fn peek(&mut self) -> Option<char> {
-        self.tokens.last().copied()
-    }
 }
 
 fn expr(input: &str) -> S {
     let mut lexer = Lexer::new(input);
-    expr_bp(&mut lexer).unwrap()
+    eprintln!("{}", input);
+    let res = expr_bp(&mut lexer).unwrap();
+    eprintln!("{}\n", res);
+    res
 }
 
 struct Frame {
@@ -73,13 +72,18 @@ fn expr_bp(lexer: &mut Lexer) -> Option<S> {
                     let res = top;
                     top = match stack.pop() {
                         Some(it) => it,
-                        None => return res.lhs,
+                        None => {
+                            eprintln!();
+                            return res.lhs;
+                        }
                     };
 
                     let mut args = Vec::new();
                     args.extend(top.lhs);
                     args.extend(res.lhs);
-                    top.lhs = Some(S::Cons(res.token.unwrap(), args));
+                    let token = res.token.unwrap();
+                    eprint!("{} ", token);
+                    top.lhs = Some(S::Cons(token, args));
                 }
             };
         };
