@@ -160,16 +160,6 @@ fn tests() {
     // test parenthesis
     let s = expr("(((0)))");
     assert_eq!(s.to_string(), "0");
-
-    // test indexing operator
-    //let s = expr("x[0][1]");
-    //assert_eq!(s.to_string(), "([ ([ x 0) 1)");
-
-    //let s = expr("a ? b : c ? d : e");
-    //assert_eq!(s.to_string(), "(? a b (? c d e))");
-
-    //let s = expr("a = 0 ? b : c = d");
-    //assert_eq!(s.to_string(), "(= a (= (? 0 b c) d))");
 }
 
 fn main() {
